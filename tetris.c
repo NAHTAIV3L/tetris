@@ -107,6 +107,7 @@ const int shapes[7][4][4][2] = {
      {{ 0, 0 }, { 1, 0 }, { 1, 1 }, { 2, 1 }},
      {{ 1, 0 }, { 0, 1 }, { 1, 1 }, { 0, 2 }}}};
 
+// Globals
 XWindow xw;
 TetrisMap tm;
 TetrisNext tn;
@@ -118,9 +119,12 @@ Window r;
 unsigned int bw;
 pthread_t updatethread;
 int curshape, nextshape, rotation, xpos, ypos;
-unsigned int lines = 0, level = 1, score = 0, fontwidth;
+unsigned int lines = 0, score = 0, highscore = 0;
+unsigned char level = 1;
 double speed = 1.0;
 XftFontDraw* xftfontdraw;
+XftFontColor* xftfontcolor;
+XftFontFont* xftfontfont;
 
 unsigned long colors[] = {
     0xFFFF00,
@@ -366,19 +370,20 @@ void NewShape() {
 }
 
 void HandleTextDrawing() {
-    char strbuf[255];
+    xftfont_draw_clear(xftfontdraw);
 
-    xftfont_clear(xftfontdraw);
+    int height = xftfontdraw->font->font->height;
+    int yoffset = tn.height + tn.y;
+    int xoffset = tn.x;
+
+    xftfont_color_set(xftfontdraw, xftfontcolor);
     
-    snprintf(strbuf, 255, "Score: %d", score);
-    xftfont_draw_text(xftfontdraw, strbuf, tn.x, tn.height + tn.y);
-    snprintf(strbuf, 255, "Level: %d", level);
-    xftfont_draw_text(xftfontdraw, strbuf, tn.x, tn.height + tn.y + xftfontdraw->font->height);
-    snprintf(strbuf, 255, "Lines: %d", lines);
-    xftfont_draw_text(xftfontdraw, strbuf, tn.x, tn.height + tn.y + (xftfontdraw->font->height * 2));
+    xftfont_draw_text(xftfontdraw, xoffset, yoffset,             "Score: %u",      score);
+    xftfont_draw_text(xftfontdraw, xoffset, (yoffset += height), "Level: %u",      (unsigned int)level);
+    xftfont_draw_text(xftfontdraw, xoffset, (yoffset += height), "Lines: %u",      lines);
+    xftfont_draw_text(xftfontdraw, xoffset, (yoffset += height), "High Score: %u", highscore);
 #ifdef TETRIS_DEBUG
-    snprintf(strbuf, 255, "Speed: %f", speed);
-    xftfont_draw_text(xftfontdraw, strbuf, tn.x, tn.height + tn.y + (xftfontdraw->font->height * 3));
+    xftfont_draw_text(xftfontdraw, xoffset, (yoffset += height), "Speed %f",       speed);
 #endif
 }
 
@@ -415,6 +420,7 @@ void DisplayScreen() {
 
 void ResetGame() {
     done = false;
+    if (score > highscore) highscore = score;
     speed = 1.0;
     score = 0;
     level = 1;
@@ -454,11 +460,14 @@ int main() {
     XSync(xw.dpy, False);
 
     xsetupgc();
-    xftfontdraw = xftfont_create(xw.dpy, buf, xw.vis, xw.cmap, xw.scr, xw.width, xw.height);
-    if (!xftfont_load_font(xftfontdraw, "Monospace-10")) {
+    xftfontdraw = xftfont_draw_create(xw.dpy, buf, xw.vis, xw.cmap, xw.scr, xw.width, xw.height);
+    xftfontfont = xftfont_font_create(xftfontdraw, "Monospace-10");
+    if (!xftfontfont) {
         perror("Could not find font");
         return 1;
     }
+    xftfont_font_set(xftfontdraw, xftfontfont);
+    xftfontcolor = xftfont_color_create(xftfontdraw, 0xffff, 0xffff, 0xffff, 0xffff);
 
     CreateTetrisMap(20, 20, 30, 1);
     CreateTetrisNext(tm.width + tm.x + 30, 20, 30, 1);
