@@ -378,10 +378,10 @@ void HandleTextDrawing() {
 
     xftfont_color_set(xftfontdraw, xftfontcolor);
     
-    xftfont_draw_text(xftfontdraw, xoffset, yoffset,             "Score: %u",      score);
+    xftfont_draw_text(xftfontdraw, xoffset, yoffset,             "High Score: %u", highscore);
+    xftfont_draw_text(xftfontdraw, xoffset, (yoffset += height), "Score:      %u", score);
     xftfont_draw_text(xftfontdraw, xoffset, (yoffset += height), "Level: %u",      (unsigned int)level);
     xftfont_draw_text(xftfontdraw, xoffset, (yoffset += height), "Lines: %u",      lines);
-    xftfont_draw_text(xftfontdraw, xoffset, (yoffset += height), "High Score: %u", highscore);
 #ifdef TETRIS_DEBUG
     xftfont_draw_text(xftfontdraw, xoffset, (yoffset += height), "Speed %f",       speed);
 #endif
