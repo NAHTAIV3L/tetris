@@ -10,30 +10,26 @@ int main(int argc, char **argv) {
   
     Nob_Cmd cmd = {0};
 
-    bool fdebug = false;
+    bool debug = false;
+    bool xlib_render = false;
     for (int i = 0; i < argc; i++) {
         if (strcmp(argv[i], "debug") == 0) {
-          nob_cmd_append(&cmd, "cc");
-          nob_cmd_append(&cmd, "-Wall", "-g");
-          nob_cmd_append(&cmd, "-lX11", "-lpthread", "-lfontconfig", "-lXft");
-          nob_cmd_append(&cmd, "-I/usr/include/freetype2", "-DTETRIS_DEBUG");
-          nob_cmd_append(&cmd, "-o", "tetris");
-          nob_cmd_append(&cmd, "tetris.c", "xftfont.c");
-          if (!nob_cmd_run_sync(cmd)) return 1;
-          cmd.count = 0;
-          fdebug = true;
+          debug = true;
+        }
+        if (strcmp(argv[i], "xlib-render") == 0) {
+            xlib_render = true;
         }
     }
-    if (!fdebug) {
-        nob_cmd_append(&cmd, "cc");
-        nob_cmd_append(&cmd, "-Wall", "-g");
-        nob_cmd_append(&cmd, "-lX11", "-lpthread", "-lfontconfig", "-lXft");
-        nob_cmd_append(&cmd, "-I/usr/include/freetype2");
-        nob_cmd_append(&cmd, "-o", "tetris");
-        nob_cmd_append(&cmd, "tetris.c", "xftfont.c");
-        if (!nob_cmd_run_sync(cmd)) return 1;
-        cmd.count = 0;
-    }
+    nob_cmd_append(&cmd, "cc");
+    nob_cmd_append(&cmd, "-Wall", "-g");
+    nob_cmd_append(&cmd, "-lX11", "-lpthread", "-lfreetype", "-lfontconfig", "-lXft", "-lGL", "-lGLEW");
+    nob_cmd_append(&cmd, "-I/usr/include/freetype2", "-I/usr/include/harfbuzz", "-I/usr/include/glib-2.0", "-I/usr/lib64/glib-2.0/include");
+    nob_cmd_append(&cmd, "-o", "tetris");
+    nob_cmd_append(&cmd, "tetris.c", "xftfont.c", "shader.c", "la.c", "main.c", "render.c", "free_glyph.c");
+    if (debug) nob_cmd_append(&cmd, "-DTETRIS_DEBUG");
+    if (xlib_render) nob_cmd_append(&cmd, "-DXLIB_RENDER");
+    if (!nob_cmd_run_sync(cmd)) return 1;
+    cmd.count = 0;
 
     for (int i = 0; i < argc; i++) {
         if (strcmp(argv[i], "run") == 0) {
