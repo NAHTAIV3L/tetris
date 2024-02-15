@@ -363,7 +363,7 @@ int main() {
 #else // XLIB_RENDER
     glxinit();
 
-    gl_render_init(&glr, xw.dpy, xw.win, xw.vi, "main.vert", "boxes.frag", "text.frag");
+    gl_render_init(&glr, xw.dpy, xw.win, xw.vi, "./shaders/main.vert", "./shaders/boxes.frag", "./shaders/text.frag");
 
     FT_Library library;
     FT_Face face;

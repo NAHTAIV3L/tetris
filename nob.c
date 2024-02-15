@@ -25,7 +25,14 @@ int main(int argc, char **argv) {
     nob_cmd_append(&cmd, "-lX11", "-lpthread", "-lfreetype", "-lfontconfig", "-lXft", "-lGL", "-lGLEW");
     nob_cmd_append(&cmd, "-I/usr/include/freetype2", "-I/usr/include/harfbuzz", "-I/usr/include/glib-2.0", "-I/usr/lib64/glib-2.0/include");
     nob_cmd_append(&cmd, "-o", "tetris");
-    nob_cmd_append(&cmd, "tetris.c", "xftfont.c", "shader.c", "la.c", "main.c", "render.c", "free_glyph.c");
+    nob_cmd_append(&cmd,
+        "./src/tetris.c",
+        "./src/xftfont.c",
+        "./src/shader.c",
+        "./src/la.c",
+        "./src/main.c",
+        "./src/render.c",
+        "./src/free_glyph.c");
     if (debug) nob_cmd_append(&cmd, "-DTETRIS_DEBUG");
     if (xlib_render) nob_cmd_append(&cmd, "-DXLIB_RENDER");
     if (!nob_cmd_run_sync(cmd)) return 1;
