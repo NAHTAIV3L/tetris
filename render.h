@@ -42,6 +42,7 @@ typedef struct {
     GLuint program[SHADER_SIZE];
 
     GLint resolution_uniform;
+    GLint time_uniform;
 
     size_t buffer_count;
     Vertex buffer[BUFFER_SIZE];

@@ -10,6 +10,7 @@
 #include <signal.h>
 #include <pthread.h>
 #include <assert.h>
+#include <sys/time.h>
 
 #include <X11/Xlib.h>
 #include <X11/Xutil.h>
@@ -137,11 +138,11 @@ void xsetupgc() {
         XEvent ev;
         XNextEvent(xw.dpy, &ev);
         if (ev.type == MapNotify)
-          break;
+            break;
     }
 
     XGetGeometry(xw.dpy, xw.win, &r, &xw.x, &xw.y, &xw.width, &xw.height, &bw,
-                 &xw.depth);
+        &xw.depth);
 
     buf = XCreatePixmap(xw.dpy, xw.win, xw.width, xw.height, xw.depth);
 
@@ -199,7 +200,6 @@ void NewShape() {
     tm.rotation = 0;
     if (tetris_test_shape(&tm)) {
         state = GAME_ENDED;
-        thread_running = false;
         return;
     }
     tetris_draw_shape(&tm);
@@ -251,6 +251,9 @@ void DisplayScreen() {
     XCopyArea(xw.dpy, buf, xw.win, gc, 0, 0, xw.width, xw.height, 0, 0);
     XFlush(xw.dpy);
 #else //XLIB_RENDER
+    struct timeval tv;
+    gettimeofday(&tv, NULL);
+    double time = (double)tv.tv_usec/1000000.0f;
     glClearColor(0.0, 0.0, 0.0, 1.0);
     glClear(GL_COLOR_BUFFER_BIT);
 
@@ -258,6 +261,7 @@ void DisplayScreen() {
     {
         gl_use_shader(&glr, SHADER_BLOCK);
         glUniform2f(glr.resolution_uniform, xw.width, xw.height);
+        glUniform1f(glr.time_uniform, time);
         gl_draw_tetris(&glr, &tm);
         gl_draw_tetris(&glr, &tn);
         gl_sync(&glr);
@@ -269,19 +273,21 @@ void DisplayScreen() {
     {
         float h = atlas.height;
         Vec2f pos = vec2f(tn.position.x, tn.pxsize.y + tn.position.y);
-        
+        Vec4f color = vec4f(0.99, 0.05, 0.97, 1.0);
+        /* Vec4f color = vec4f(1.0, 1.0, 1.0, 1.0); */
         gl_use_shader(&glr, SHADER_TEXT);
         glUniform2f(glr.resolution_uniform, xw.width, xw.height);
-        free_glyph_draw_text(&atlas, &glr, pos, vec4f(1.0, 1.0, 1.0, 1.0), "High Score: %u", highscore);
+        glUniform1f(glr.time_uniform, time);
+        free_glyph_draw_text(&atlas, &glr, pos, color, "High Score: %u", highscore);
         pos.y += h;
-        free_glyph_draw_text(&atlas, &glr, pos, vec4f(1.0, 1.0, 1.0, 1.0), "Score:      %u", score);
+        free_glyph_draw_text(&atlas, &glr, pos, color, "Score:      %u", score);
         pos.y += h;
-        free_glyph_draw_text(&atlas, &glr, pos, vec4f(1.0, 1.0, 1.0, 1.0), "Level: %u", (unsigned int)level);
+        free_glyph_draw_text(&atlas, &glr, pos, color, "Level: %u", (unsigned int)level);
         pos.y += h;
-        free_glyph_draw_text(&atlas, &glr, pos, vec4f(1.0, 1.0, 1.0, 1.0), "Lines: %u", lines);
+        free_glyph_draw_text(&atlas, &glr, pos, color, "Lines: %u", lines);
 #ifdef TETRIS_DEBUG
         pos.y += h;
-        free_glyph_draw_text(&atlas, &glr, pos, vec4f(1.0, 1.0, 1.0, 1.0), "Speed: %f", speed);
+        free_glyph_draw_text(&atlas, &glr, pos, color, "Speed: %f", speed);
 #endif // TETRIS_DEBUG
         gl_sync(&glr);
         glDrawArrays(GL_TRIANGLES, 0, glr.buffer_count);
@@ -302,26 +308,6 @@ void ResetGame() {
     tetris_clear_map(&tm);
     tn.shape = rand() % 7;
     NewShape();
-}
-
-void *UpdateGame(void *arg) {
-    thread_running = true;
-    while (thread_running) {
-        usleep(1000000 * speed);
-        tetris_clear_shape(&tm);
-        tm.y++;
-        bool hit = tetris_test_shape(&tm);
-        if (hit)
-            tm.y--;
-
-        tetris_draw_shape(&tm);
-        if (hit)
-            NewShape();
-
-        /* DisplayScreen(); */
-    }
-    thread_running = false;
-    return NULL;
 }
 
 void glxinit() {
@@ -393,7 +379,12 @@ int main() {
         printf("Could not set pixel size\n");
         exit(1);
     }
-
+#ifdef TETRIS_DEBUG
+    int OpenGLVersion[2];
+	glGetIntegerv(GL_MAJOR_VERSION, &OpenGLVersion[0]);
+	glGetIntegerv(GL_MINOR_VERSION, &OpenGLVersion[1]);
+    printf("OpenGL Verision %d.%d\n", OpenGLVersion[0], OpenGLVersion[1]);
+#endif //TETRIS_DEBUG
     glyph_atlas_init(&atlas, face);
 #endif // XLIB_RENDER
 
@@ -404,13 +395,17 @@ int main() {
     NewShape();
     DisplayScreen();
 
-    pthread_create(&updatethread, NULL, UpdateGame, NULL);
-
+    struct timeval tvstart, tvmovestart;
+    gettimeofday(&tvstart, NULL);
+    gettimeofday(&tvmovestart, NULL);
+    
     XEvent ev;
     while (!done) {
+        tetris_clear_shape(&tm);
         if (XPending(xw.dpy)) {
             XNextEvent(xw.dpy, &ev);
-            if (ev.type == KeyPress) {
+            switch (ev.type) {
+            case KeyPress: {
                 XKeyEvent *e = &ev.xkey;
                 KeySym ksym = NoSymbol;
                 char buf[64];
@@ -419,83 +414,89 @@ int main() {
                     done = true;
                     continue;
                 }
-                else if (ksym == XK_r) {
+                else if (ksym == XK_r) 
                     ResetGame();
-                    if (!thread_running)
-                        pthread_create(&updatethread, NULL, UpdateGame, NULL);
-                }
                 switch (state) {
                 case GAME_RUNNING: {
-                    if (ksym == XK_F1) {
+                    switch (ksym) {
+                    case XK_F1: {
                         state = GAME_PAUSED;
-                        if (thread_running) {
-                            pthread_cancel(updatethread);
-                            thread_running = false;
-                        }
-                    }
-                    else {
-                        tetris_clear_shape(&tm);
-                        if (ksym == XK_Down)
-                            score += tetris_move_down(&tm);
-                        else if (ksym == XK_Left)
-                            tetris_move_left(&tm);
-                        else if (ksym == XK_Right)
-                            tetris_move_right(&tm);
-                        else if (ksym == XK_Up || ksym == XK_x)
-                            tetris_rotate_clockwise(&tm);
-                        else if (ksym == XK_z || ksym == XK_Control_L || ksym == XK_Control_R)
-                            tetris_rotate_countercw(&tm);
-                        else if (ksym == XK_space)
-                            score += tetris_insta_drop(&tm);
-                        tetris_draw_shape(&tm);
+                    } break;
+                    case XK_Down:
+                        score += tetris_move_down(&tm); break;
+                    case XK_Left:
+                        tetris_move_left(&tm); break;
+                    case XK_Right:
+                        tetris_move_right(&tm); break;
+                    case XK_Up:
+                    case XK_x:
+                        tetris_rotate_clockwise(&tm); break;
+                    case XK_z:
+                    case XK_Control_L:
+                    case XK_Control_R:
+                        tetris_rotate_countercw(&tm); break;
+                    case XK_space:
+                        score += tetris_insta_drop(&tm); break;
+
                     }
                 } break;
-                case GAME_PAUSED: {
+                case GAME_PAUSED:
                     if (ksym == XK_Escape) {
                         state = GAME_RUNNING;
-                        if (!thread_running)
-                            pthread_create(&updatethread, NULL, UpdateGame, NULL);
                     }
-                } break;
-                case GAME_ENDED: {
-                    if (thread_running) {
-                        pthread_cancel(updatethread);
-                        thread_running = false;
-                    }
-                    continue;
-                } break;
+                case GAME_ENDED:
                 }
-            } else if (ev.type == Expose) {
-#ifndef XLIB_RENDER
-                glViewport(ev.xexpose.x, ev.xexpose.y, ev.xexpose.width, ev.xexpose.height);
-#endif // XLIB_RENDER
-                xw.width = ev.xexpose.width;
-                xw.height = ev.xexpose.height;
+                
 
-            }
-            switch(state) {
-            case GAME_PAUSED: {
-                if (ev.type == FocusIn) {
+            } break;
+            case Expose: {
+                if (!ev.xexpose.count) {
+#ifndef XLIB_RENDER
+                    glViewport(ev.xexpose.x, ev.xexpose.y, ev.xexpose.width, ev.xexpose.height);
+#endif // XLIB_RENDER
+                    xw.width = ev.xexpose.width;
+                    xw.height = ev.xexpose.height;
+                }
+            } break;
+            case FocusIn: {
+                if (state == GAME_PAUSED)
                     state = GAME_RUNNING;
-                    if (!thread_running)
-                        pthread_create(&updatethread, NULL, UpdateGame, NULL);
-                }
             } break;
-            case GAME_RUNNING: {
-                if (ev.type == FocusOut) {
+            case FocusOut: {
+                if (state == GAME_RUNNING) 
                     state = GAME_PAUSED;
-                    if (thread_running) {
-                        pthread_cancel(updatethread);
-                        thread_running = false;
-                    }
-                }
             } break;
-            default:
             }
         }
-        DisplayScreen();
+        tetris_draw_shape(&tm);
+        if (state == GAME_RUNNING) {
+            struct timeval tvend, tvelapsed;
+            gettimeofday(&tvend, NULL);
+            timersub(&tvend, &tvmovestart, &tvelapsed);
+            double elapsed = (double)tvelapsed.tv_sec + (double)tvelapsed.tv_usec/1000000.0f;
+            if (elapsed >= speed) {
+                gettimeofday(&tvmovestart, NULL);
+                tetris_clear_shape(&tm);
+                tm.y++;
+                bool hit = tetris_test_shape(&tm);
+                if (hit)
+                    tm.y--;
+                tetris_draw_shape(&tm);
+                if (hit)
+                    NewShape();
+            }
+        }
+        {
+            struct timeval tvend, tvelapsed;
+            gettimeofday(&tvend, NULL);
+            timersub(&tvend, &tvstart, &tvelapsed);
+            double elapsed = (double)tvelapsed.tv_sec + (double)tvelapsed.tv_usec/1000000.0f;
+            if (elapsed >= 1.0f / 60.0f) {
+                gettimeofday(&tvstart, NULL);
+                DisplayScreen();
+            }
+        }
     }
-    pthread_cancel(updatethread);
 
 #ifdef XLIB_RENDER
     XFreePixmap(xw.dpy, buf);
@@ -509,4 +510,3 @@ int main() {
     XCloseDisplay(xw.dpy);
     return 0;
 }
-

@@ -38,6 +38,7 @@ void gl_render_init(Render* glr, Display* dpy, Window win, XVisualInfo* vi,
 void gl_use_shader(Render* glr, Shader s) {
     glUseProgram(glr->program[s]);
     glr->resolution_uniform = glGetUniformLocation(glr->program[s], "res");
+    glr->time_uniform = glGetUniformLocation(glr->program[s], "time");
     glr->current_shader = s;
 }
 

@@ -47,7 +47,6 @@ bool tetris_move_down(TetrisMap* tm) {
         return false;
     }
     return true;
-    
 }
 
 void tetris_move_left(TetrisMap* tm) {
@@ -83,7 +82,6 @@ void tetris_rotate_countercw(TetrisMap* tm) {
     tm->rotation = (tm->rotation + 3) % 4;
     if (tetris_test_shape(tm))
         tm->rotation = (tm->rotation + 1) % 4;
-    
 }
 
 
